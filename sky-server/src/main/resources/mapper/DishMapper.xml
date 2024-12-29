@@ -8,4 +8,48 @@
         values(#{name},#{categoryId},#{price},#{image},#{description},#{status},#{createTime},#{updateTime},#{createUser},#{updateUser})
 
     </insert>
+    <update id="updateDish">
+        update dish
+        <set>
+            <if test="name != null">name = #{name},</if>
+            <if test="categoryId != null">category_id = #{categoryId},</if>
+            <if test="price != null">price = #{price},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="image != null">image = #{image},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="updateUser != null">update_user = #{updateUser},</if>
+        </set>
+        where id = #{id}
+    </update>
+    <delete id="deleteByIds">
+        delete from dish where id in
+        <foreach collection="ids" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <!--/编写该处sql语句时需要注意的几个点
+    //1、填写条件时需要注明哪张表，因为两张表有重合键名 2、自动封装时注意是否和属性名字一一对应，不然可能封装失败-->
+    <select id="GetDishByX" resultType="com.sky.vo.DishVO">
+        select d.*, c.name as category_name from dish d left outer join category c on d.category_id = c.id
+        <where>
+            <if test="name != null and name != ''">
+                and d.name like concat('%',#{name},'%')
+            </if>
+            <if test="categoryId != null">
+                and d.category_id = #{categoryId}
+            </if>
+            <if test="status != null">
+                and d.status = #{status}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+    <select id="getDishById" resultType="com.sky.entity.Dish">
+        SELECT * from dish where id in
+        <foreach collection="ids" item = "id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+    </select>
 </mapper>

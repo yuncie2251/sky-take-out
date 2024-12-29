@@ -1,15 +1,26 @@
 package com.sky.service.impl;
 
+import com.github.pagehelper.Page;
+import com.github.pagehelper.PageHelper;
 import com.sky.annotation.AutoFill;
+import com.sky.constant.MessageConstant;
+import com.sky.constant.StatusConstant;
 import com.sky.dto.DishDTO;
+import com.sky.dto.DishPageQueryDTO;
 import com.sky.entity.Dish;
 import com.sky.entity.DishFlavor;
+import com.sky.entity.SetmealDish;
 import com.sky.enumeration.OperationType;
+import com.sky.exception.DeletionNotAllowedException;
 import com.sky.mapper.DishFlavorMapper;
 import com.sky.mapper.DishMapper;
+import com.sky.mapper.SetmealMapper;
+import com.sky.result.PageResult;
 import com.sky.service.DishService;
+import com.sky.vo.DishVO;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +34,9 @@ public class DishServiceImpl implements DishService {
 
     @Autowired
     private DishFlavorMapper dishFlavorMapper;
+
+    @Autowired
+    private SetmealMapper setmealMapper;
 
     /**
      * 因为要向两张表中插入数据，所以使用事务处理
@@ -47,6 +61,84 @@ public class DishServiceImpl implements DishService {
             dishFlavorMapper.insertBatch(flavors);
         }
 
+
+    }
+
+    /**
+     * 对菜品进行分类展示
+     * @param dishPageQueryDTO
+     * @return
+     */
+    @Override
+    public PageResult pageQuery(DishPageQueryDTO dishPageQueryDTO) {
+        PageHelper.startPage(dishPageQueryDTO.getPage(),dishPageQueryDTO.getPageSize());
+        Page<DishVO> page = dishMapper.GetDishByX(dishPageQueryDTO);
+        return new PageResult(page.getTotal(),page.getResult());
+    }
+
+    /**
+     * 删除菜品操作
+     * @param ids
+     */
+    @Override
+    @Transactional
+    public void deleteByIds(List<Long> ids) {
+
+        //首先，根据id找到dish表中对应的菜品
+        List<Dish> dishes = dishMapper.getDishById(ids);
+
+
+        //删除菜品前，需要进行如下考虑
+        //1.菜品是否停售，若仍在启用，则无法删除
+        for (Dish dish : dishes) {
+            if(dish.getStatus() == StatusConstant.ENABLE){
+                throw new DeletionNotAllowedException(MessageConstant.DISH_ON_SALE);
+            }
+        }
+
+        //2.菜品是否与套餐关联，若关联，则无法删除
+        List<Long> setmealIds = setmealMapper.getSetmealById(ids);
+        if(setmealIds != null && setmealIds.size() > 0){
+            throw new DeletionNotAllowedException(MessageConstant.DISH_BE_RELATED_BY_SETMEAL);
+        }
+
+        //判断完成后，不仅要在dish表中删除相应菜品
+        dishMapper.deleteByIds(ids);
+
+        //还应在dish-flavor表中删除对应菜品口味
+        //因此，还应启用事务回滚
+        dishFlavorMapper.deleteFlavorByDishId(ids);
+    }
+
+    @Override
+    public DishVO getDishById(Long id) {
+        //根据id获取菜品信息，不仅需要获取dish表中的dish信息，还要获取dish_flavor表中对应的flavor
+        DishVO dishVO = new DishVO();
+        Dish dish = dishMapper.getDishByOneId(id);
+        BeanUtils.copyProperties(dish,dishVO);
+        List<DishFlavor> flavors = dishFlavorMapper.getFlavorById(id);
+        dishVO.setFlavors(flavors);
+
+        return dishVO;
+    }
+
+    @Override
+    public void updateDish(DishDTO dishDTO) {
+        //在进行菜品修改时，需要额外注意的一点是口味的修改
+        //与之前不同，菜品修改涉及到两张表的修改，原来的口味可能会删除/新增，比较保险的做法是先删掉之前的口味，然后再插入更新后的口味
+        Dish dish = new Dish();
+        BeanUtils.copyProperties(dishDTO,dish);
+        dishMapper.updateDish(dish);
+
+        Long id = dishDTO.getId();
+        dishFlavorMapper.deleteFlavorByOneDishId(id);
+
+        List<DishFlavor> flavors = dishDTO.getFlavors();
+        if(flavors != null && flavors.size() != 0){
+            flavors.forEach(dishFlavor -> {dishFlavor.setDishId(id);});
+            //其次向口味表中插入n个口味,批量操作
+            dishFlavorMapper.insertBatch(flavors);
+        }
 
     }
 }
