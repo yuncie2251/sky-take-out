@@ -11,3 +11,11 @@ sky:
     access-key-id: LTAI5tMrp47BKd8UVrN9YXDa
     access-key-secret: bTNpIWnI8ig3udGWHdubm2XJ7TDbL7
     bucket-name: web-tilaszxy
+  redis:
+    host: localhost
+    port: 6379
+    password: "123456"
+    database: 10
+  wechat:
+    appid: wx40aeb8f6adbd0b9b
+    secret: fb52a744a1e571bcc0ac7657dc2b74e5
